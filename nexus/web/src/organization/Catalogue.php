@@ -9,10 +9,12 @@ class Catalogue {
 	public static function getEntries($groupId, $networkId, $inputString, $filters) {
 		
 		$conf = array('append' => true, 'mode' => 0644, 'timeFormat' => '%X %x');	
-		$logger = Log::singleton("file", Utilities::getLogRoot() ."/web.log", "", $conf, PEAR_LOG_DEBUG);
+		$logger = Log::singleton("file", Utilities::getLogRoot() ."/directory.log", "", $conf, PEAR_LOG_DEBUG);
 				
 		$results = array();
 		$terms = trim(Utilities::strip2($inputString));
+		
+		//$logger->log("Raw terms: " . $terms);
 					
 		// TODO: Escape apostrophes instead of stripping
 		// TODO: solve for 2 orgs with same name
@@ -21,6 +23,7 @@ class Catalogue {
 		if (strlen($terms) > 0) {
 	
 			$searchTerms = preg_split("/[\s,]+/", $terms);
+			//$logger->log("Raw terms: " . print_r($searchTerms, true));
 			$counter = 0;
 		
 			while ($counter < 3 && isset($searchTerms[$counter])) {
@@ -378,6 +381,8 @@ class Catalogue {
 		// TODO: use citext index in db instead of lower() function here
 		// http://stackoverflow.com/questions/7005302/postgresql-how-to-make-not-case-sensitive-queries
 		
+		$logger = Log::singleton("file", Utilities::getLogRoot() ."/directory.log", "", $conf, PEAR_LOG_DEBUG);
+		
 		$query = "
 			select 'Organization' as type, o.id as id, o.name as name
 			from organization o, organization_organization oo
@@ -391,7 +396,7 @@ class Catalogue {
 			union
 			
 			select distinct 'Person' as type, u.id as id, (u.fname || ' ' || u.mname || ' ' || u.lname || '::' || u.username) as name
-			from public.user u, organization_organization oo, user_organization uo
+			from public.user u, organization_organization oo, user_organization uo, organization o
 			where (
 				lower(u.fname) like lower('%' || $1 || '%')
 				or lower(u.lname) like lower('%' || $1 || '%')
@@ -402,11 +407,13 @@ class Catalogue {
 			and uo.organization_fk = oo.organization_to_fk
 			and oo.organization_from_fk = $2
 			and oo.relationship ='parent'
-		
+			and o.id = oo.organization_to_fk
+            and o.suspend_dttm is null
+            
 			union
 			
 			select distinct 'Contact' as type, c.id as id, c.name as name
-			from contact c, organization_organization oo, organization_contact oc
+			from contact c, organization_organization oo, organization_contact oc, organization o
 			where (
 				lower(c.name) like lower('%' || $1 || '%')
 				or lower(c.title) like lower('%' || $1 || '%')
@@ -415,11 +422,13 @@ class Catalogue {
 			and oc.organization_fk = oo.organization_to_fk
 			and oo.organization_from_fk = $2
 			and oo.relationship ='parent'
+			and o.id = oo.organization_to_fk
+            and o.suspend_dttm is null
 			
 			union
 			
 			select distinct 'Program' as type, p.id as id, p.name as name
-			from program p, organization_organization oo, organization_program op
+			from program p, organization_organization oo, organization_program op, organization o
 			where (
 				lower(p.name) like lower('%' || $1 || '%')
 				or lower(p.description) like lower('%' || $1 || '%')
@@ -428,33 +437,39 @@ class Catalogue {
 			and op.organization_fk = oo.organization_to_fk
 			and oo.organization_from_fk = $2
 			and oo.relationship ='parent'
+			and o.id = oo.organization_to_fk
+            and o.suspend_dttm is null
 			
 			union
 			
 			select 'Language' as type, l.id as id, l.language as name
-			from language l, organization_organization oo, organization_language ol
+			from language l, organization_organization oo, organization_language ol, organization o
 			where 
 				lower(l.language) like lower('%' || $1 || '%')		
 			and l.id = ol.language_fk
 			and ol.organization_fk = oo.organization_to_fk
 			and oo.organization_from_fk = $2
 			and oo.relationship ='parent'
-			
+			and o.id = oo.organization_to_fk
+            and o.suspend_dttm is null
+            
 			union
 			
 			select 'Topic' as type, t.id as id, t.name as name
-			from topic t, organization_organization oo, organization_topic ot
+			from topic t, organization_organization oo, organization_topic ot, organization o
 			where 
 				lower(t.name) like lower('%' || $1 || '%')		
 			and t.id = ot.topic_fk
 			and ot.organization_fk = oo.organization_to_fk
 			and oo.organization_from_fk = $2
-			and oo.relationship ='parent'	
+			and oo.relationship ='parent'
+			and o.id = oo.organization_to_fk
+            and o.suspend_dttm is null
 					
 			union
 			
 			select distinct 'Location' as type, loc.id as id, loc.municipality || ', ' || loc.region2 as name
-			from location loc, organization_organization oo, organization_location oloc
+			from location loc, organization_organization oo, organization_location oloc, organization o
 			where (
 				lower(loc.address1) like lower('%' || $1 || '%')
 				or lower(loc.address2) like lower('%' || $1 || '%')
@@ -468,7 +483,13 @@ class Catalogue {
 			and oloc.organization_fk = oo.organization_to_fk
 			and oo.organization_from_fk = $2
 			and oo.relationship ='parent'
+			and o.id = oo.organization_to_fk
+            and o.suspend_dttm is null
 			";
+			
+			//$logger->log($term);
+			//$logger->log($networkId);
+			//$logger->log($query);
 			
 			return PgDatabase::psExecute($query, array($term, $networkId));			
 			
