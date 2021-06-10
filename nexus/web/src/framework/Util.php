@@ -198,6 +198,8 @@ class Utilities {
 	public static function getLiAppId() { return LI_APP_ID; }
 	
 	public static function getLiAppSecret() { return LI_APP_SECRET; }
+
+	public static function getJwtSecret() { return JWT_SECRET; }
 	
 	private static $supportedLangs = array(
 		'en' => 'en_US.utf8',
